@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-ajaxy/1.6.1/scripts/jquery.ajaxy.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+      integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+      crossorigin=""
+    />
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+      integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+      integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+      crossorigin=""
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-ajax/2.1.0/leaflet.ajax.js"></script>
+    <style></style>
+  </head>
+  <body>
+    <h4 class="text-center">James Adventures</h4>
+    <div class="h-100 d-flex align-items-center">
+      <div
+        id="map"
+        style="height: 94.2vh; width: 100%; border: 2px solid#00E9FA"
+      ></div>
+    </div>
+    <div class="loader" id="loader"></div>
+    <div id="myPopup" class="popup">
+      <h3 id="updateCountry"></h3>
+      <label for="visitDate">Enter visit date:</label>
+      <input type="date" id="visitDate" name="visitDate" />
+      <br />
+      <label for="pLink">Enter Picture Link:</label>
+      <input type="text" id="pLink" name="pLink" />
+      <br />
+      <button class="btn btn-info btn-sm" onclick="sendData()">Save</button>
+      <button class="btn btn-info btn-sm" onclick="closePopup()">close</button>
+    </div>
+
+    <script>
+      var currentUrl = window.location.href;
+      var geojson;
+      var slectedId;
+      var nm;
+      var info = L.control();
+      var map = L.map("map").setView([43.70757133392822, -12.2152313682426], 2);
+      L.tileLayer(currentUrl + "black.jfif", {}).addTo(map);
+
+      info.onAdd = function (map) {
+        this._div = L.DomUtil.create("div", "info"); // create a div with a class "info"
+        this.update();
+        return this._div;
+      };
+
+      // method that we will use to update the control based on feature properties passed
+      info.update = function (props) {
+        this._div.innerHTML = props
+          ? "<h4>" +
+            props.name +
+            "</h4>" +
+            "Visit Date: <b>" +
+            props.date +
+            "</b><br/> Picture Link:" +
+            "<a href='" +
+            props.pictureLink +
+            "' target='blank' rel='noopener noreferrer'>" +
+            props.pictureLink +
+            "</a>" +
+            "<br/><button type='button' class='btn btn-info btn-sm' onClick = 'updateData(" +
+            props.id +
+            ")' >Update</button>"
+          : "";
+      };
+
+      info.addTo(map);
+
+      function style(feature) {
+        return {
+          fillColor: "#00E9FA",
+          weight: 2,
+          opacity: 1,
+          color: "#00E9FA",
+          dashArray: "3",
+          fillOpacity: 0.2,
+        };
+      }
+      function highlightFeature(e) {
+        var layer = e.target;
+        layer.setStyle({
+          weight: 5,
+          color: "#00FFFF",
+          dashArray: "",
+          fillColor: "#00FFFF",
+          fillOpacity: 0.7,
+        });
+
+        // layer.bringToFront();
+      }
+
+      function resetHighlight(e) {
+        geojson.resetStyle(e.target);
+      }
+      function zoomToFeature(e) {
+        nm = e.sourceTarget.feature.properties.name;
+        info.update(e.sourceTarget.feature.properties);
+        nm = e.sourceTarget.feature.properties.name;
+        map.fitBounds(e.target.getBounds());
+        // console.log(e.sourceTarget.feature.properties);
+      }
+      $.ajax({
+        dataType: "json",
+        url: "worldBounds.json",
+        success: function (data) {
+          geojson = L.geoJson(data, {
+            style: style,
+            onEachFeature: function (f, l) {
+              l.on({
+                mouseover: highlightFeature,
+                mouseout: resetHighlight,
+                click: zoomToFeature,
+              });
+            },
+          }).addTo(map);
+        },
+      }).error(function () {});
+
+      function closePopup() {
+        document.querySelector("#myPopup").style.display = "none";
+      }
+      function sendData() {
+        var link = document.getElementById("pLink").value;
+        var vDate = document.getElementById("visitDate").value;
+        // console.log(link, vDate);
+        // console.log(slectedId, 'id');
+        var data = { link: link, date: vDate, id: slectedId };
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "update.php", true);
+        xhr.setRequestHeader(
+          "Content-Type",
+          "application/x-www-form-urlencoded"
+        );
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+            console.log(xhr.responseText);
+            document.querySelector("#loader").style.display = "block"
+            setTimeout(function () {
+              location.reload(true);
+              document.querySelector("#loader").style.display = "none"
+            }, 3000);
+          }
+        };
+        xhr.send("data=" + JSON.stringify(data));
+
+        document.querySelector("#myPopup").style.display = "none";
+      }
+      function updateData(id) {
+        slectedId = id;
+        console.log(nm, id);
+        const popup = document.querySelector("#myPopup");
+        const upCountry = document.getElementById("updateCountry");
+        popup.style.display = "block";
+        upCountry.innerHTML = "Scratch " + nm;
+      }
+    </script>
+  </body>
+  <style>
+    .info {
+      padding: 6px 8px;
+      font: 14px/16px Arial, Helvetica, sans-serif;
+      background: white;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+      border-radius: 5px;
+    }
+    .info h4 {
+      margin: 0 0 5px;
+      color: #777;
+    }
+    .popup {
+      display: none;
+      position: fixed;
+
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 20px;
+      border: 3px solid #00E9FA;
+      z-index: 1000000;
+    }
+    .loader {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 20px;
+      border: 16px solid #00E9FA;
+      border-radius: 50%;
+      border-top: 16px solid #3498db;
+      width: 120px;
+      height: 120px;
+      -webkit-animation: spin 2s linear infinite; /* Safari */
+      animation: spin 2s linear infinite;
+      z-index: 1000000;
+      display: none;
+    }
+    /* Safari */
+    @-webkit-keyframes spin {
+      0% {
+        -webkit-transform: rotate(0deg);
+      }
+      100% {
+        -webkit-transform: rotate(360deg);
+      }
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</html>
